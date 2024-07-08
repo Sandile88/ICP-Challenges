@@ -1,3 +1,4 @@
+import 'r'
 import { v4 as uuidv4 } from 'uuid'; //will be used to generate unique identifiers for the messages
 import { Server, StableBTreeMap, ic } from 'azle'; 
  // 'Server' class represents the server for the canister. Allows us to define and run the canister's HTTP server.
