@@ -3,139 +3,87 @@ import {v4 as uuidv4} from 'uuid';
 import { Server, StableBTreeMap, ic } from 'azle'; 
 import express from 'express';
 
-class Bank {
+class Account {
     id: string;
-    balance: number = 0;
-    status: string //set conditions for open, closed, or inactive.
-    deposit: string;
-    withdraw: string;
-    isAccount: boolean;
+    balance: number;
+    // status: string; //set conditions for open, or inactive.
+    // deposit: string;
+    // withdraw: string;
     createdAt: Date;
-    updatedAt: Date | null
+    updatedAt: Date | null;
+    txs: Array<string>
 }
 
-const bankingActivity = StableBTreeMap<string, Bank>(0);
+const bankAccounts = StableBTreeMap<string, Account>(0);
+
 
 export default Server(() => {
     const exApp = express();
     exApp.use(express.json());
 
     // add account
-    exApp.post("/bank", (req, res) => {
-        const activity: Bank = {id: uuidv4(), createdAt: getCurrentDate(), ...req.body};
-        bankingActivity.insert(activity.id, activity);
-        const formattedRes = JSON.stringify(activity, null, 2).replace(/\n/g, '\\n')
-        res.end(formattedRes)
+    exApp.post("/accounts", (req, res) => {
+        const account: Account = {id: uuidv4(), balance:0, createdAt: getCurrentDate(), updatedAt: getCurrentDate(), txs: []};
+        bankAccounts.insert(account.id, account);
+        res.json(account);
+        // const formattedRes = JSON.stringify(account, null, 2).replace(/\n/g, '\\n')
+        // res.end(formattedRes)
     });
 
-    //get all transactions
-    exApp.get("/transactions", (req, res) => {
-        const transactions = Array.from(bankingActivity.values())
-        res.json(transactions);
-    });
-
-    //get specific txn
-    exApp.get("/transactions/:id", (req, res) =>{
-        const activityId = req.params.id;
-        const account = bankingActivity.get(activityId);
+// query param and url param
+     //get specific txn
+     exApp.get("/accounts/account/:id", (req, res) =>{
+        const accountId = req.params.id;
+        const account = bankAccounts.get(accountId);
             if ("None" in account) {
-                res.status(404).send(`The transaction with id=${activityId} not found`);
-            } else {
-                res.json(account.Some); 
-            }
+                res.status(404).send(`The account with id=${accountId} not found`);
+                return;
+            } 
+            
+            res.json(account.Some); 
+            
     });
 
-    //add txn
-    exApp.put("/add/:id", (req, res) => {
-        const activityId = req.params.id;
-        const add = bankingActivity.put(activityId);
-        if ("None" in add) {
-            res.status(400).send(`Added a transaction with id=${activityId}.`);
-        } else {
-            res.json(add.Some);
-        }
 
-    });
-    
-    //remove txn
-    exApp.delete("/delete/:id", (req, res) => {
-        const activityId = req.params.id;
-        const withdrawal = bankingActivity.remove(activityId);
-        if ("None" in withdrawal) {
-            res.status(400).send(`Couldn't delete a transaction with id=${activityId}. Transaction not found`);
-        } else {
-            res.json(withdrawal.Some);
-        }
-    });
 
-    //check status
-    exApp.get("/status/:id", (req, res) =>  {
-        const activityId = req.params.id;
-        const account = bankingActivity.get(activityId);
-        if ("None" in account) {
-            res.status(400).send(`Account with id=${activityId} not found.`);
-        } else {
-            const transaction = account.Some;
-            if (transaction.balance > 0){
-                transaction.status = "active";
-            } else{
-                transaction.status = "inactive";
-            }
-            res.json({id: transaction.id, transaction.status}); 
-        }
-    });
-
-    // deposit
     exApp.put("/deposit/:id", (req, res) => {
-        const activityId = req.params.id;
-        const account = bankingActivity.get(activityId);
+        const accountId = req.params.id;
+        const account = bankAccounts.get(accountId);
         if ("None" in account) {
-            res.status(400).send(`Couldn't update a transaction with id=${activityId}. Transaction not found.`)
+            res.status(400).send(`Couldn't update a transaction with id=${accountId}. Transaction not found.`)
         } else {
-            const transaction = account.Some;
+            const _account = account.Some;
             const depositAmount = req.body.amount;
-            transaction.balance += depositAmount;
-            transaction.updatedAt = getCurrentDate();
-            bankingActivity.insert(transaction.id, transaction);
-            res.json(transaction);
+            _account.balance += depositAmount;
+            _account.updatedAt = getCurrentDate();
+            _account.txs.push(`Deposited : ${depositAmount}`)
+            bankAccounts.insert(accountId,  _account);
+            res.json(_account);
         }
 
     });
 
-    //withdraw
     exApp.put("/withdraw/:id", (req, res) => {
-        const activityId = req.params.id;
-        const account = bankingActivity.get(activityId);
-
+        const accountId = req.params.id;
+        const account = bankAccounts.get(accountId);
         if ("None" in account) {
-            res.status(400).send(`Couldn't update a transaction with id=${activityId}. Transaction not found.`)
-        } else {
-            const transaction = account.Some;
-            const withdrawAmount = req.body.amount;
-            if (transaction.balance >= withdrawAmount){
-                transaction.balance -= withdrawAmount;
-                transaction.updatedAt = getCurrentDate();
-                bankingActivity.insert(transaction.id, transaction);
-                res.json(transaction);
-                
-            } else {
-                res.status(400).send(`Insufficient funds for transaction with id=${activityId}!`)
-            }
-        }
+            res.status(400).send(`Couldn't update a transaction with id=${accountId}. Transaction not found.`);
+            return;
+        } 
+        const _account = account.Some;
+        const withdrawAmount = req.body.amount;
+            
+        if ( _account.balance - withdrawAmount < 0) {
+            res.status(500).send(`Account=${accountId} withdrawal failed: Insufficient funds.`)
+            return;
+        } 
+        _account.balance -= withdrawAmount;
+        _account.updatedAt = getCurrentDate();
+        bankAccounts.insert(accountId,  _account);
+        res.json(_account);
+        
     });
 
-
-    //balance
-    exApp.get("/balance/:id", (req, res) => {
-        const activityId = req.params.id;
-        const account = bankingActivity.get(activityId);
-        if ("None" in account) {
-            res.status(404).send(`Transaction with id=${activityId} not found`);
-        } else {
-            const transaction = account.Some;
-            res.json({id: transaction.id, balance: transaction.balance}); 
-        }
-    });
 
     return exApp.listen();
 });
