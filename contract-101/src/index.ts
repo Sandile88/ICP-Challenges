@@ -6,12 +6,9 @@ import express from 'express';
 class Account {
     id: string;
     balance: number;
-    // status: string; //set conditions for open, or inactive.
-    // deposit: string;
-    // withdraw: string;
     createdAt: Date;
     updatedAt: Date | null;
-    txs: Array<string>
+    transactions: Array<string>
 }
 
 const bankAccounts = StableBTreeMap<string, Account>(0);
@@ -23,15 +20,13 @@ export default Server(() => {
 
     // add account
     exApp.post("/accounts", (req, res) => {
-        const account: Account = {id: uuidv4(), balance:0, createdAt: getCurrentDate(), updatedAt: getCurrentDate(), txs: []};
+        const account: Account = {id: uuidv4(), balance:0, createdAt: getCurrentDate(), updatedAt: getCurrentDate(), transactions: []};
         bankAccounts.insert(account.id, account);
         res.json(account);
-        // const formattedRes = JSON.stringify(account, null, 2).replace(/\n/g, '\\n')
-        // res.end(formattedRes)
+
     });
 
-// query param and url param
-     //get specific txn
+     //get specific account
      exApp.get("/accounts/account/:id", (req, res) =>{
         const accountId = req.params.id;
         const account = bankAccounts.get(accountId);
@@ -39,30 +34,29 @@ export default Server(() => {
                 res.status(404).send(`The account with id=${accountId} not found`);
                 return;
             } 
-            
             res.json(account.Some); 
-            
     });
 
 
-
+    // deposit amount to account
     exApp.put("/deposit/:id", (req, res) => {
         const accountId = req.params.id;
         const account = bankAccounts.get(accountId);
         if ("None" in account) {
-            res.status(400).send(`Couldn't update a transaction with id=${accountId}. Transaction not found.`)
+     res.status(400).send(`Couldn't update a transaction with id=${accountId}. Transaction not found.`)
         } else {
             const _account = account.Some;
             const depositAmount = req.body.amount;
             _account.balance += depositAmount;
             _account.updatedAt = getCurrentDate();
-            _account.txs.push(`Deposited : ${depositAmount}`)
+            _account.transactions.push(`Deposited : ${depositAmount}`)
             bankAccounts.insert(accountId,  _account);
             res.json(_account);
         }
-
     });
 
+
+    // withdraw amount to account
     exApp.put("/withdraw/:id", (req, res) => {
         const accountId = req.params.id;
         const account = bankAccounts.get(accountId);
@@ -79,12 +73,14 @@ export default Server(() => {
         } 
         _account.balance -= withdrawAmount;
         _account.updatedAt = getCurrentDate();
+        _account.transactions.push(`Withdrew : ${withdrawAmount}`)
+
         bankAccounts.insert(accountId,  _account);
         res.json(_account);
         
     });
 
-
+    
     return exApp.listen();
 });
 
